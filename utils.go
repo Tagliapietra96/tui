@@ -77,8 +77,6 @@ func FormatIntWithPrefix(number, minLength int) string {
 	return b.String()
 }
 
-func RemoveFrames()
-
 // GetTerminalSize function returns the width and height of the terminal.
 // It returns the width and height of the terminal as integers.
 // If the terminal size cannot be determined, it returns 0, 0.
