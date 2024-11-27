@@ -7,65 +7,14 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/term"
-	"github.com/mattn/go-runewidth"
 )
-
-// colors
-var (
-	ColorAccent     = lipgloss.AdaptiveColor{Light: "201", Dark: "213"}
-	ColorBright     = lipgloss.AdaptiveColor{Light: "0", Dark: "15"}
-	ColorMuted      = lipgloss.AdaptiveColor{Light: "244", Dark: "241"}
-	ColorLightMuted = lipgloss.AdaptiveColor{Light: "241", Dark: "248"}
-	ColorError      = lipgloss.AdaptiveColor{Light: "160", Dark: "196"}
-	ColorSuccess    = lipgloss.AdaptiveColor{Light: "22", Dark: "40"}
-	ColorWarning    = lipgloss.AdaptiveColor{Light: "208", Dark: "214"}
-	ColorInfo       = lipgloss.AdaptiveColor{Light: "33", Dark: "45"}
-	ColorLink       = lipgloss.AdaptiveColor{Light: "27", Dark: "33"}
-)
-
-// styles
-var (
-	// text element styles
-	titleStyle     = lipgloss.NewStyle().Foreground(ColorBright).Bold(true).Inline(false).MarginBottom(1)
-	boldStyle      = lipgloss.NewStyle().Bold(true).Inline(true)
-	italicStyle    = lipgloss.NewStyle().Italic(true).Inline(true)
-	underlineStyle = lipgloss.NewStyle().Underline(true).Inline(true)
-	linkStyle      = lipgloss.NewStyle().Foreground(ColorLink).Underline(true).Inline(true)
-	quoteStyle     = lipgloss.NewStyle().Foreground(ColorMuted).Inline(false).Italic(true).Border(lipgloss.ThickBorder(), false, false, false, true).BorderForeground(ColorMuted).PaddingLeft(2).Margin(1, 0)
-
-	// text color styles
-	brigthStyle     = lipgloss.NewStyle().Foreground(ColorBright).Inline(true)
-	mutedLightStyle = lipgloss.NewStyle().Foreground(ColorLightMuted).Inline(true)
-	mutedStyle      = lipgloss.NewStyle().Foreground(ColorMuted).Inline(true)
-	accentStyle     = lipgloss.NewStyle().Foreground(ColorAccent).Inline(true)
-	successStyle    = lipgloss.NewStyle().Foreground(ColorSuccess).Inline(true)
-	infoStyle       = lipgloss.NewStyle().Foreground(ColorInfo).Inline(true)
-	warningStyle    = lipgloss.NewStyle().Foreground(ColorWarning).Inline(true)
-	errorStyle      = lipgloss.NewStyle().Foreground(ColorError).Inline(true)
-
-	// input styles
-	questionIconStyle = lipgloss.NewStyle().Foreground(ColorSuccess).Bold(true).Inline(true)
-	questionStyle     = lipgloss.NewStyle().Bold(true).Inline(true)
-
-	// table styles
-	rowStyle        = lipgloss.NewStyle().Padding(0, 2, 0, 0)
-	oddRowStyle     = rowStyle.Foreground(ColorLightMuted)
-	headingRowStyle = rowStyle.Bold(true).Foreground(ColorBright)
-)
-
-// GetNumberWidth function returns the width of a number.
-// It takes an integer as input and returns the width of the number.
-// The width of the number is the number of characters in the number.
-func GetNumberWidth(number int) int {
-	return runewidth.StringWidth(strconv.Itoa(number))
-}
 
 // FormatIntWithPrefix function formats an integer with a prefix.
 // It takes an integer and a minimum length as input and returns a string with the number formatted.
 // If the number is less than the minimum length, it will add zeros at the beginning of the number.
 func FormatIntWithPrefix(number, minLength int) string {
 	n := strconv.Itoa(number)
-	nl := runewidth.StringWidth(n)
+	nl := lipgloss.Width(n)
 	var b strings.Builder
 	if nl < minLength {
 		for i := 0; i < minLength-nl; i++ {
@@ -77,10 +26,107 @@ func FormatIntWithPrefix(number, minLength int) string {
 	return b.String()
 }
 
-// GetTerminalSize function returns the width and height of the terminal.
+// CleanString function cleans a string.
+// It takes a string as input and returns a string with the leading and trailing whitespaces removed.
+// It also removes empty lines at the beginning and end of the string.
+// It Useful for cleaning up unwonted margins and paddings in a styled string.
+func CleanString(s string) string {
+	// set a slice to track the result
+	result := make([]string, 0)
+	var found bool
+
+	// iterate over the lines in the string
+	// delete all white spaces in the beginning and end of the line
+	// start appending the lines to the result slice once a non-empty line is found
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" && !found {
+			continue
+		}
+
+		found = true
+		result = append(result, line)
+	}
+
+	// iterate backwards over the result slice
+	// remove empty lines at the end of the string
+	// continue until a non-empty line is found
+	for i := len(result) - 1; i >= 0; i-- {
+		if result[i] != "" {
+			result = result[:i+1]
+			break
+		}
+	}
+
+	// ricombine the result slice into a single string
+	return strings.Join(result, "\n")
+}
+
+// TruncateString function truncates a string.
+// It takes a string, a length, and an optional truncation string as
+// input and returns a truncated string.
+// If the length of the string is greater than the specified length,
+// it truncates the string and appends the truncation string.
+// If the truncation string is not provided, it uses "..." as the
+// default truncation string.
+// Example:
+//
+//	TruncateString("Hello, World!", 10) => "Hello, ..."
+//	TruncateString("Hello, World!", 10, "!!!") => "Hello, !!!"
+//	TruncateString("Hello, World!", 10, "") => "Hello, Wor"
+//	TruncateString("Hello, World!", 1) => "H"
+//
+// Note: The length is neither the number of characters nor the number
+// of bytes in the string. Is the width of the string.
+// The function uses lipgloss.Width to calculate the width of the string
+// and the truncation string.
+// The length of the truncation string is subtracted from the specified length
+// to determine the maximum length of the string.
+// If the length is less than the width of the truncation string, the function
+// returns the truncated string without the truncation string.
+// If the length is less than or equal to 0, the function returns an empty string.
+func TruncateString(str string, length int, truncation ...string) string {
+	// If the length is less than or equal to 0, return an empty string
+	if length <= 0 {
+		return ""
+	}
+
+	// set the truncation string
+	var b strings.Builder
+	tr := "..."
+	if len(truncation) > 0 {
+		tr = truncation[0]
+	}
+
+	// If the width of the string is greater than the specified length
+	// truncate the string and append the truncation string
+	if lipgloss.Width(str) > length {
+		dots := Render(tr, func(s lipgloss.Style) lipgloss.Style {
+			return s.Foreground(ColorMuted)
+		})
+
+		// If the length is less than the width of the truncation string
+		// return the truncated string without the truncation string
+		if length < lipgloss.Width(dots) {
+			return str[:length]
+		}
+
+		// Otherwise, truncate the string and append the truncation string
+		b.WriteString(str[:length-lipgloss.Width(dots)])
+		b.WriteString(dots)
+	} else {
+		// if the width of the string is less than or equal to the specified length
+		// return the string as is
+		b.WriteString(str)
+	}
+
+	return b.String()
+}
+
+// getTerminalSize function returns the width and height of the terminal.
 // It returns the width and height of the terminal as integers.
 // If the terminal size cannot be determined, it returns 0, 0.
-func GetTerminalSize() (int, int) {
+func getTerminalSize() (int, int) {
 	w, h, err := term.GetSize(os.Stdout.Fd())
 	if err != nil {
 		return 0, 0
